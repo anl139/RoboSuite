@@ -43,24 +43,25 @@ class Agent:
         self.noise = noise
         self.update_network_parameters(tau=1)
 
+def choose_action(self, observation, validation=False):
+    if self.time_step < self.warmup and not validation:
+        mu = T.tensor(np.random.normal(scale=self.noise, size=(self.n_actions,))).to(self.actor.device)
+    else:
+        state = T.tensor(observation, dtype=T.float).to(self.actor.device)
+        mu = self.actor.forward(state).to(self.actor.device)
 
-    def choose_action(self, observation, validation = False):
-        if self.time_step < self.warmup and not validation:
-            mu = T.tensor(np.random.normal(scale=self.noise, size=(self.n_actions,))).to(self.actor.device)
-        else:
-            state = T.tensor(observation, dtype = T.float).to(self.actor.device)
-            mu = self.actor.forward(state).to(self.actor.device)
+    mu_prime = mu + T.tensor(np.random.normal(scale=self.noise), dtype=T.float).to(self.actor.device)  # ← add noise first
+    min_t = T.tensor(self.min_action, dtype=T.float).to(self.actor.device)
+    max_t = T.tensor(self.max_action, dtype=T.float).to(self.actor.device)
+    mu_prime = T.max(T.min(mu_prime, max_t), min_t)  # ← replaces the old T.clamp line
 
-        mu_prime = mu + T.tensor(np.random.normal(scale=self.noise), dtype=T.float).to(self.actor.device)
-        mu_prime = T.clamp(mu_prime,self.min_action[0],self.max_action[0])
-
-        self.time_step += 1
-        return mu_prime.cpu().detach().numpy()
+    self.time_step += 1
+    return mu_prime.cpu().detach().numpy()
     
     def remember(self,state,action,reward,next_state,done):
         self.memory.store_transitions(state,action,reward,next_state,done)
 
-    def learn(self):
+def learn(self):
         if self.memory.mem_ctr < self.batch_size * 10:
             return
         
@@ -71,43 +72,33 @@ class Agent:
         next_state = T.tensor(next_state, dtype = T.float).to(self.critic_1.device)
         state = T.tensor(state, dtype = T.float).to(self.critic_1.device)
         action = T.tensor(action, dtype = T.float).to(self.critic_1.device)
-
         target_actions = self.target_actor.forward(next_state)
         noise = T.clamp(T.tensor(np.random.normal(scale=0.2, size=target_actions.shape), dtype=T.float),-0.5, 0.5).to(self.critic_1.device)
         target_actions = target_actions + noise
-        target_actions = T.clamp(target_actions,self.min_action[0],self.max_action[0])
-
+        min_t = T.tensor(self.min_action, dtype=T.float).to(self.critic_1.device)  # ← added
+        max_t = T.tensor(self.max_action, dtype=T.float).to(self.critic_1.device)  # ← added
+        target_actions = T.max(T.min(target_actions, max_t), min_t)                # ← replaces old T.clamp
         next_q1 = self.target_critic_1.forward(next_state, target_actions)
         next_q2 = self.target_critic_2.forward(next_state, target_actions)
-
         q1 = self.critic_1.forward(state,action)
         q2 = self.critic_2.forward(state,action)
-
         next_q1[done] = 0.0
         next_q2[done] = 0.0
-
         next_q1 = next_q1.view(-1)
         next_q2 = next_q2.view(-1)
-
         next_critic_value = T.min(next_q1,next_q2)
         
         target = reward + self.gamma * next_critic_value
-
         target = target.view(self.batch_size,1)
-
         self.critic_1.optimizer.zero_grad()
         self.critic_2.optimizer.zero_grad()
-
         q1_loss = F.mse_loss(target,q1)
         q2_loss = F.mse_loss(target,q2)
         critic_loss = q1_loss + q2_loss
         critic_loss.backward()
-
         self.critic_1.optimizer.step()
         self.critic_2.optimizer.step()
-
         self.learn_step_cntr +=1
-
         if self.learn_step_cntr % self.update_actor_iter != 0:
             return
         
@@ -115,7 +106,6 @@ class Agent:
         actor_q1_loss = self.critic_1.forward(state, self.actor.forward(state))
         actor_loss = -T.mean(actor_q1_loss)
         actor_loss.backward()
-
         self.actor.optimizer.step()
         self.update_network_parameters()
 
