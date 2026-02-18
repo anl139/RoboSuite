@@ -73,7 +73,8 @@ class Agent:
         action = T.tensor(action, dtype = T.float).to(self.critic_1.device)
 
         target_actions = self.target_actor.forward(next_state)
-        target_actions = target_actions + T.clamp(T.tensor(np.random.normal(scale=0.2)),-0.5, max = 0.5)
+        noise = T.clamp(T.tensor(np.random.normal(scale=0.2, size=target_actions.shape), dtype=T.float),-0.5, 0.5).to(self.critic_1.device)
+        target_actions = target_actions + noise
         target_actions = T.clamp(target_actions,self.min_action[0],self.max_action[0])
 
         next_q1 = self.target_critic_1.forward(next_state, target_actions)
