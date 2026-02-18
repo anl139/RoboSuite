@@ -119,7 +119,7 @@ class Agent:
         self.update_network_parameters()
 
 
-    def update_network_parameters(self,tau):
+    def update_network_parameters(self,tau=None):
         if tau ==None:
             tau = self.tau
         actor_params = self.actor.named_parameters()
