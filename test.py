@@ -68,30 +68,27 @@ state_vector = np.concatenate([v.ravel() for v in obs.values()])
 
 print("Observation vector shape:", state_vector.shape)
 agent.load_models()
-
 for i in range(n_games):
     obs_dict = env.reset()
-    observation = flatten_obs(obs_dict)   # ✅ vector
+    observation = flatten_obs(obs_dict)
     done = False
     score = 0.0
-  
+
     while not done:
         action = agent.choose_action(observation)
         action = np.asarray(action, dtype=np.float32)
-
         next_obs_dict, reward, done, info = env.step(action)
-        next_observation = flatten_obs(next_obs_dict)  # ✅ vector
-
-        agent.remember(
-            observation,          # ✅ vector
-            action,               # ✅ vector
-            float(reward),
-            next_observation,     # ✅ vector
-            float(done),
-        )
-
+        next_observation = flatten_obs(next_obs_dict)
+        agent.remember(observation, action, float(reward), next_observation, float(done))
         agent.learn()
         observation = next_observation
         score += reward
 
+    writer.add_scalar('Score', score, i)
+    if score > best_score:
+        best_score = score
+        agent.save_models()
+        print(f"New best score: {best_score}, saving models")
     print(f"Episode {i} | Score {score}")
+
+writer.close()
