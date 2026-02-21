@@ -25,7 +25,8 @@ class Agent:
         self.time_step = 0
         self.warmup = warm_up
         self.update_actor_iter = update_actor_interval
-        
+        self.device = T.device("cuda" if T.cuda.is_available() else "cpu")
+        print("Using device:", self.device)
 
         self.actor = ActorNetwork(input_dims=(self.input_dims,), fc1_dims=layer1_size, fc2_dims=layer2_size,n_actions=self.n_actions,
                                   name='actor', learning_rate=actor_learning_rate)
@@ -41,27 +42,33 @@ class Agent:
         self.target_critic_2 = CriticNetwork(input_dims=(self.input_dims,), fc1_dims=layer1_size, fc2_dims=layer2_size,n_actions=self.n_actions,
                                   name='target_critic_2', learning_rate=critic_learning_rate)
         self.noise = noise
+        self.actor.to(self.device)
+        self.critic_1.to(self.device)
+        self.critic_2.to(self.device)
+        self.target_actor.to(self.device)
+        self.target_critic_1.to(self.device)
+        self.target_critic_2.to(self.device)
         self.update_network_parameters(tau=1)
 
-def choose_action(self, observation, validation=False):
-    if self.time_step < self.warmup and not validation:
-        mu = T.tensor(np.random.normal(scale=self.noise, size=(self.n_actions,))).to(self.actor.device)
-    else:
-        state = T.tensor(observation, dtype=T.float).to(self.actor.device)
-        mu = self.actor.forward(state).to(self.actor.device)
+    def choose_action(self, observation, validation=False):
+        if self.time_step < self.warmup and not validation:
+            mu = T.tensor(np.random.normal(scale=self.noise, size=(self.n_actions,))).to(self.actor.device)
+        else:
+            state = T.tensor(observation, dtype=T.float).to(self.actor.device)
+            mu = self.actor.forward(state).to(self.actor.device)
 
-    mu_prime = mu + T.tensor(np.random.normal(scale=self.noise), dtype=T.float).to(self.actor.device)  # ← add noise first
-    min_t = T.tensor(self.min_action, dtype=T.float).to(self.actor.device)
-    max_t = T.tensor(self.max_action, dtype=T.float).to(self.actor.device)
-    mu_prime = T.max(T.min(mu_prime, max_t), min_t)  # ← replaces the old T.clamp line
+        mu_prime = mu + T.tensor(np.random.normal(scale=self.noise), dtype=T.float).to(self.actor.device)  # ← add noise first
+        min_t = T.tensor(self.min_action, dtype=T.float).to(self.actor.device)
+        max_t = T.tensor(self.max_action, dtype=T.float).to(self.actor.device)
+        mu_prime = T.max(T.min(mu_prime, max_t), min_t)  # ← replaces the old T.clamp line
 
-    self.time_step += 1
-    return mu_prime.cpu().detach().numpy()
+        self.time_step += 1
+        return mu_prime.cpu().detach().numpy()
     
     def remember(self,state,action,reward,next_state,done):
         self.memory.store_transitions(state,action,reward,next_state,done)
 
-def learn(self):
+    def learn(self):
         if self.memory.mem_ctr < self.batch_size * 10:
             return
         
